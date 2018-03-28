@@ -46,7 +46,7 @@ function resolveCloudFormationenvVars(serverless, envVars) {
 	)
 	.spread((resources, exports) => {
 
-		function mapValue(value) {
+		function mapValue(value, key) {
 			if (_.isObject(value)) {
 				if (value.Ref) {
 					if (value.Ref === "AWS::Region") {
@@ -86,13 +86,22 @@ function resolveCloudFormationenvVars(serverless, envVars) {
 					return BbPromise.map(parts, v => mapValue(v))
 					.then(resolvedParts => _.join(resolvedParts, delimiter));
 				}
+				// Fallback to an already set environment variable for an unknown reference type
+				else {
+					// We'll assume its already set in the environment by some smarter framework!
+					const resolved = process.env[key];
+					if (_.isNil(resolved)) {
+						serverless.cli.log(`WARNING: Failed to resolve environment variable ${key}`);
+					}
+					return BbPromise.resolve(resolved);
+				}
 			}
 
 			return BbPromise.resolve(value);
 		}
 
 		return BbPromise.reduce(_.keys(envVars), (result, key) => {
-			return BbPromise.resolve(mapValue(envVars[key]))
+			return BbPromise.resolve(mapValue(envVars[key], key))
 			.then(resolved => {
 				process.env.SLS_DEBUG && serverless.cli.log(`Resolved environment variable ${key}: ${JSON.stringify(resolved)}`);
 				result[key] = resolved;
